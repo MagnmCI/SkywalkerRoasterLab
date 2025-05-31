@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // External variables
 // -----------------------------------------------------------------------------
-extern PID myPID;
+extern AutoTunePID tempController;
 extern double pInput, pOutput, pSetpoint;
 extern double Kp, Ki, Kd;
 extern int pMode, pSampleTime, manualHeatLevel;
@@ -135,10 +135,9 @@ void eStop() {
 //PID hControls///
 //adjusting the heating power based on PID temperature control
 void handlePIDControl() {
-    if (myPID.GetMode() == AUTOMATIC) {
-        pInput = temp; // give current temperature as input to pid model
-        myPID.Compute();
-        int roundedHeat = std::round(pOutput / 5.0) * 5;
+    if (tempController.GetMode() == OperationalMode::Normal ) {
+        tempController.update(temp); // Update PID controller
+        int roundedHeat = std::round(tempController.getOutput() / 5.0) * 5;
         handleHEAT(roundedHeat);
     } else {
         handleHEAT(manualHeatLevel);  // Use stored manual heat level
@@ -147,10 +146,10 @@ void handlePIDControl() {
 
 void setPIDMode(bool usePID) {
     if (usePID) {
-        myPID.SetMode(AUTOMATIC); // Enable PID
+        tempController.SetMode(AUTOMATIC); // Enable PID
         D_println("PID mode set to AUTOMATIC");
     } else {
-        myPID.SetMode(MANUAL); // Disable PID
+        tempController.SetMode(MANUAL); // Disable PID
         manualHeatLevel = 0;  // Set heat to 0% for safety
         handleHEAT(manualHeatLevel); // Apply the change immediately
         D_println("PID mode set to MANUAL");

@@ -1,12 +1,15 @@
 /***************************************************
  * HiBean ESP32 BLE Roaster Control
  *
- * Libraries Required: MedianFilterLib 1.0.1, PID 1.2.0
+ * Libraries Required: EMWA 1.0.2, PID 1.2.0
  ***************************************************/
 
 #include <Arduino.h>
-#include <MedianFilterLib.h>
-#include <PID_v1.h>
+//#include <MedianFilterLib.h>
+//#include <PID_v1.h>
+#include <AutoTunePID.h>
+#include <Ewma.h>
+
 #include "SkiPinDefns.h"
 #include "SerialDebug.h"
 #include "SkiBLE.h"
@@ -17,7 +20,7 @@
 // -----------------------------------------------------------------------------
 // Current Sketch and Release Version (for BLE device info)
 // -----------------------------------------------------------------------------
-String firmWareVersion = String("1.0.2");
+String firmWareVersion = String("1.0.3");
 String sketchName = String(__FILE__).substring(String(__FILE__).lastIndexOf('/')+1);
 
 // -----------------------------------------------------------------------------
@@ -28,13 +31,12 @@ double temp          = 0.0;           // Filtered temperature
 // -----------------------------------------------------------------------------
 // Define PID variables
 // -----------------------------------------------------------------------------
-double pInput, pOutput;
 double pSetpoint = 0.0; // Desired temperature (adjustable on the fly)
-int pMode = P_ON_M; // http://brettbeauregard.com/blog/2017/06/introducing-proportional-on-measurement/
-double Kp = 12.0, Ki = 0.5, Kd = 5.0; // pid calibrations for P_ON_M (adjustable on the fly)
-int pSampleTime = 1000; //ms (adjustable on the fly)
+float kP, kI, kD = 1.5, 0.2, 5.0;
+enum PIDModes { OFF = 0, ON = 1, TUNE = 2 };
+int CurrentPIDMode = 0;
+AutoTunePID tempController(0, 100, TuningMethod::ZieglerNichols);
 int manualHeatLevel = 50;
-PID myPID(&pInput, &pOutput, &pSetpoint, Kp, Ki, Kd, pMode, DIRECT);  //pid instance with our default values
 
 void setup() {
     rgbLedWrite(LED_PIN, LED_GREEN[0], LED_GREEN[1], LED_GREEN[2]);
@@ -56,11 +58,10 @@ void setup() {
     attachInterrupt(RX_PIN, watchRoasterStart, FALLING);
 
     // Set PID to start in MANUAL mode
-    myPID.SetMode(MANUAL);
-
-    // clamp output limits to 0-100(% heat), set sample interval 
-    myPID.SetOutputLimits(0.0,100.0);
-    myPID.SetSampleTime(pSampleTime);
+    
+    tempController.setOperationalMode(OperationalMode::Hold); // Don't run for now
+    tempController.enableAntiWindup(true, 0.8); // Enable anti-windup
+    tempController.setManualGains(float kP, float kI, float kD); // Set manual PID gains
 
     // Ensure heat starts at 0% for safety
     manualHeatLevel = 0;
